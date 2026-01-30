@@ -115,24 +115,95 @@ app.get('/api/hamqsl/conditions', async (req, res) => {
   }
 });
 
-// DX Cluster proxy (for future WebSocket implementation)
+// DX Cluster proxy - fetches from multiple sources
 app.get('/api/dxcluster/spots', async (req, res) => {
   try {
     // Try DXWatch first
-    const response = await fetch('https://www.dxwatch.com/api/spots.json?limit=20', {
-      headers: { 'User-Agent': 'OpenHamClock/3.0' }
+    const response = await fetch('https://dxwatch.com/dxsd1/s.php?s=0&r=50&cdx=', {
+      headers: { 
+        'User-Agent': 'OpenHamClock/3.0',
+        'Accept': 'application/json'
+      },
+      timeout: 5000
     });
+    
     if (response.ok) {
-      const data = await response.json();
-      res.json(data);
-    } else {
-      // Return empty array if API unavailable
-      res.json([]);
+      const text = await response.text();
+      try {
+        // DXWatch returns JSON array
+        const data = JSON.parse(text);
+        const spots = data.map(spot => ({
+          freq: spot.fr ? (parseFloat(spot.fr) / 1000).toFixed(3) : spot.frequency,
+          call: spot.dx || spot.dx_call,
+          comment: spot.cm || spot.comment || '',
+          time: spot.t || spot.time || '',
+          spotter: spot.sp || spot.spotter
+        })).slice(0, 20);
+        return res.json(spots);
+      } catch (parseErr) {
+        console.log('DXWatch parse error, trying alternate format');
+      }
     }
   } catch (error) {
-    console.error('DX Cluster API error:', error.message);
-    res.json([]); // Return empty array on error
+    console.error('DXWatch API error:', error.message);
   }
+
+  // Try HamQTH DX Cluster as fallback
+  try {
+    const response = await fetch('https://www.hamqth.com/dxc_csv.php?limit=25', {
+      headers: { 'User-Agent': 'OpenHamClock/3.0' },
+      timeout: 5000
+    });
+    
+    if (response.ok) {
+      const text = await response.text();
+      const lines = text.trim().split('\n');
+      const spots = lines.slice(0, 20).map(line => {
+        const parts = line.split(',');
+        return {
+          freq: parts[1] ? (parseFloat(parts[1]) / 1000).toFixed(3) : '0.000',
+          call: parts[2] || 'UNKNOWN',
+          comment: parts[5] || '',
+          time: parts[4] ? parts[4].substring(0, 5) + 'z' : '',
+          spotter: parts[3] || ''
+        };
+      }).filter(s => s.call !== 'UNKNOWN');
+      
+      if (spots.length > 0) {
+        return res.json(spots);
+      }
+    }
+  } catch (error) {
+    console.error('HamQTH DX Cluster error:', error.message);
+  }
+
+  // Try DX Summit RSS as another fallback
+  try {
+    const response = await fetch('https://www.dxsummit.fi/api/v1/spots?limit=25', {
+      headers: { 'User-Agent': 'OpenHamClock/3.0' },
+      timeout: 5000
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const spots = data.map(spot => ({
+        freq: spot.frequency ? (parseFloat(spot.frequency) / 1000).toFixed(3) : '0.000',
+        call: spot.dx_call || spot.callsign,
+        comment: spot.info || spot.comment || '',
+        time: spot.time ? spot.time.substring(11, 16) + 'z' : '',
+        spotter: spot.spotter || ''
+      })).slice(0, 20);
+      
+      if (spots.length > 0) {
+        return res.json(spots);
+      }
+    }
+  } catch (error) {
+    console.error('DX Summit API error:', error.message);
+  }
+
+  // Return empty array if all sources fail
+  res.json([]);
 });
 
 // QRZ Callsign lookup (requires API key)
