@@ -993,15 +993,13 @@
       return { cqZone: null, ituZone: null, continent: null };
     };
     
-    // Filter DX paths based on filters (same logic as spot filtering)
+    // Filter DX paths based on filters (filter by SPOTTER origin)
     const filterDXPaths = (paths, filters) => {
       if (!paths || !filters) return paths;
       if (Object.keys(filters).length === 0) return paths;
       
       return paths.filter(path => {
-        // Get info for DX call (the target station)
-        const dxCallInfo = getCallsignInfo(path.dxCall);
-        // Get info for spotter (origin)
+        // Get info for spotter (origin) - this is what we filter by
         const spotterInfo = getCallsignInfo(path.spotter);
         
         // Watchlist filter - show ONLY watchlist if enabled
@@ -1022,23 +1020,23 @@
           if (isExcluded) return false;
         }
         
-        // CQ Zone filter (applies to DX station)
+        // CQ Zone filter - filter by SPOTTER's zone (origin)
         if (filters.cqZones?.length > 0) {
-          if (!dxCallInfo.cqZone || !filters.cqZones.includes(dxCallInfo.cqZone)) {
+          if (!spotterInfo.cqZone || !filters.cqZones.includes(spotterInfo.cqZone)) {
             return false;
           }
         }
         
-        // ITU Zone filter (applies to DX station)
+        // ITU Zone filter - filter by SPOTTER's zone (origin)
         if (filters.ituZones?.length > 0) {
-          if (!dxCallInfo.ituZone || !filters.ituZones.includes(dxCallInfo.ituZone)) {
+          if (!spotterInfo.ituZone || !filters.ituZones.includes(spotterInfo.ituZone)) {
             return false;
           }
         }
         
-        // Continent filter (applies to DX station)
+        // Continent filter - filter by SPOTTER's continent (origin)
         if (filters.continents?.length > 0) {
-          if (!dxCallInfo.continent || !filters.continents.includes(dxCallInfo.continent)) {
+          if (!spotterInfo.continent || !filters.continents.includes(spotterInfo.continent)) {
             return false;
           }
         }
@@ -1081,7 +1079,8 @@
         if (!filters || Object.keys(filters).length === 0) return spots;
         
         return spots.filter(spot => {
-          const callInfo = getCallsignInfo(spot.call);
+          // Get spotter info for origin-based filtering
+          const spotterInfo = getCallsignInfo(spot.spotter);
           
           // Watchlist only mode - must match watchlist
           if (filters.watchlistOnly && filters.watchlist?.length > 0) {
@@ -1101,19 +1100,19 @@
             if (isExcluded) return false;
           }
           
-          // CQ Zone filter
+          // CQ Zone filter - filter by SPOTTER's zone (origin)
           if (filters.cqZones?.length > 0) {
-            if (!callInfo.cqZone || !filters.cqZones.includes(callInfo.cqZone)) return false;
+            if (!spotterInfo.cqZone || !filters.cqZones.includes(spotterInfo.cqZone)) return false;
           }
           
-          // ITU Zone filter
+          // ITU Zone filter - filter by SPOTTER's zone (origin)
           if (filters.ituZones?.length > 0) {
-            if (!callInfo.ituZone || !filters.ituZones.includes(callInfo.ituZone)) return false;
+            if (!spotterInfo.ituZone || !filters.ituZones.includes(spotterInfo.ituZone)) return false;
           }
           
-          // Continent filter
+          // Continent filter - filter by SPOTTER's continent (origin)
           if (filters.continents?.length > 0) {
-            if (!callInfo.continent || !filters.continents.includes(callInfo.continent)) return false;
+            if (!spotterInfo.continent || !filters.continents.includes(spotterInfo.continent)) return false;
           }
           
           // Band filter
