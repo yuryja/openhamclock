@@ -77,12 +77,19 @@ function generateInputFile(params) {
   // Format frequencies
   const freqList = frequencies.map(f => f.toFixed(3)).join(' ');
   
-  // ITURHFProp input file format - complete version
+  // ITURHFProp input file format - complete version with all required fields
   const input = `PathName "OpenHamClock"
+PathTXName "TX"
 Path.L_tx.lat ${txLat.toFixed(4)}
 Path.L_tx.lng ${txLon.toFixed(4)}
+TXAntFilePath "ISOTROPIC"
+TXGOS 0.0
+PathRXName "RX"
 Path.L_rx.lat ${rxLat.toFixed(4)}
 Path.L_rx.lng ${rxLon.toFixed(4)}
+RXAntFilePath "ISOTROPIC"
+RXGOS 0.0
+AntennaOrientation "TX2RX"
 Path.year ${year}
 Path.month ${month}
 Path.hour ${hour}
@@ -91,13 +98,21 @@ Path.frequency ${freqList}
 Path.txpower ${(10 * Math.log10(txPower / 1000)).toFixed(1)}
 Path.BW 3000
 Path.SNRr ${requiredSNR}
-Path.Relr ${requiredReliability}
-Path.ManMadeNoise ${manMadeNoise}
+Path.SNRXXp ${requiredReliability}
+Path.ManMadeNoise "${manMadeNoise}"
 Path.Modulation ANALOG
 Path.SorL SHORTPATH
-TXAntFilePath "ISOTROPIC"
-RXAntFilePath "ISOTROPIC"
+LL.lat ${rxLat.toFixed(4)}
+LL.lng ${rxLon.toFixed(4)}
+LR.lat ${rxLat.toFixed(4)}
+LR.lng ${rxLon.toFixed(4)}
+UL.lat ${rxLat.toFixed(4)}
+UL.lng ${rxLon.toFixed(4)}
+UR.lat ${rxLat.toFixed(4)}
+UR.lng ${rxLon.toFixed(4)}
 DataFilePath "${ITURHFPROP_DATA}/Data/"
+RptFilePath "${tmpDir}/"
+RptFileFormat "RPT_PR | RPT_SNR | RPT_BCR"
 `;
 
   return input;
@@ -366,10 +381,18 @@ app.get('/api/diag', async (req, res) => {
   // Create a minimal test input file and try to run
   try {
     const { execSync } = require('child_process');
-    const testInput = `Path.L_tx.lat 40.0
+    const testInput = `PathName "Test"
+PathTXName "TX"
+Path.L_tx.lat 40.0
 Path.L_tx.lng -75.0
+TXAntFilePath "ISOTROPIC"
+TXGOS 0.0
+PathRXName "RX"
 Path.L_rx.lat 51.0
 Path.L_rx.lng 0.0
+RXAntFilePath "ISOTROPIC"
+RXGOS 0.0
+AntennaOrientation "TX2RX"
 Path.year 2025
 Path.month 6
 Path.hour 12
@@ -378,13 +401,21 @@ Path.frequency 14.0
 Path.txpower -10.0
 Path.BW 3000
 Path.SNRr 15
-Path.Relr 90
-Path.ManMadeNoise RESIDENTIAL
+Path.SNRXXp 90
+Path.ManMadeNoise "RESIDENTIAL"
 Path.Modulation ANALOG
 Path.SorL SHORTPATH
-TXAntFilePath "ISOTROPIC"
-RXAntFilePath "ISOTROPIC"
+LL.lat 51.0
+LL.lng 0.0
+LR.lat 51.0
+LR.lng 0.0
+UL.lat 51.0
+UL.lng 0.0
+UR.lat 51.0
+UR.lng 0.0
 DataFilePath "${ITURHFPROP_DATA}/Data/"
+RptFilePath "/tmp/"
+RptFileFormat "RPT_PR | RPT_SNR | RPT_BCR"
 `;
     fs.writeFileSync('/tmp/test_input.txt', testInput);
     results.testRun.inputFile = testInput.split('\n');
