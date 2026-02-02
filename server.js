@@ -41,8 +41,16 @@ if (ITURHFPROP_URL) {
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files - use 'dist' in production (Vite build), 'public' in development
+const staticDir = process.env.NODE_ENV === 'production' 
+  ? path.join(__dirname, 'dist')
+  : path.join(__dirname, 'public');
+app.use(express.static(staticDir));
+
+// Also serve public folder for any additional assets
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'public')));
+}
 
 // ============================================
 // API PROXY ENDPOINTS
@@ -1501,18 +1509,67 @@ app.get('/api/myspots/:callsign', async (req, res) => {
 // SATELLITE TRACKING API
 // ============================================
 
-// Ham radio satellites - NORAD IDs
+// Comprehensive ham radio satellites - NORAD IDs
+// Updated list of active amateur radio satellites
 const HAM_SATELLITES = {
-  'ISS': { norad: 25544, name: 'ISS (ZARYA)', color: '#00ffff', priority: 1 },
-  'AO-91': { norad: 43017, name: 'AO-91 (Fox-1B)', color: '#ff6600', priority: 2 },
-  'AO-92': { norad: 43137, name: 'AO-92 (Fox-1D)', color: '#ff9900', priority: 2 },
-  'SO-50': { norad: 27607, name: 'SO-50 (SaudiSat)', color: '#00ff00', priority: 2 },
-  'RS-44': { norad: 44909, name: 'RS-44 (DOSAAF)', color: '#ff0066', priority: 2 },
-  'IO-117': { norad: 53106, name: 'IO-117 (GreenCube)', color: '#00ff99', priority: 3 },
-  'CAS-4A': { norad: 42761, name: 'CAS-4A (ZHUHAI-1 01)', color: '#9966ff', priority: 3 },
-  'CAS-4B': { norad: 42759, name: 'CAS-4B (ZHUHAI-1 02)', color: '#9933ff', priority: 3 },
-  'PO-101': { norad: 43678, name: 'PO-101 (Diwata-2)', color: '#ff3399', priority: 3 },
-  'TEVEL': { norad: 50988, name: 'TEVEL-1', color: '#66ccff', priority: 4 }
+  // High Priority - Popular FM satellites
+  'ISS': { norad: 25544, name: 'ISS (ZARYA)', color: '#00ffff', priority: 1, mode: 'FM/APRS/SSTV' },
+  'SO-50': { norad: 27607, name: 'SO-50', color: '#00ff00', priority: 1, mode: 'FM' },
+  'AO-91': { norad: 43017, name: 'AO-91 (Fox-1B)', color: '#ff6600', priority: 1, mode: 'FM' },
+  'AO-92': { norad: 43137, name: 'AO-92 (Fox-1D)', color: '#ff9900', priority: 1, mode: 'FM/L-band' },
+  'PO-101': { norad: 43678, name: 'PO-101 (Diwata-2)', color: '#ff3399', priority: 1, mode: 'FM' },
+  
+  // Linear Transponder Satellites
+  'RS-44': { norad: 44909, name: 'RS-44 (DOSAAF)', color: '#ff0066', priority: 1, mode: 'Linear' },
+  'AO-7': { norad: 7530, name: 'AO-7', color: '#ffcc00', priority: 2, mode: 'Linear (daylight)' },
+  'FO-29': { norad: 24278, name: 'FO-29 (JAS-2)', color: '#ff6699', priority: 2, mode: 'Linear' },
+  'FO-99': { norad: 43937, name: 'FO-99 (NEXUS)', color: '#ff99cc', priority: 2, mode: 'Linear' },
+  'JO-97': { norad: 43803, name: 'JO-97 (JY1Sat)', color: '#cc99ff', priority: 2, mode: 'Linear/FM' },
+  'XW-2A': { norad: 40903, name: 'XW-2A (CAS-3A)', color: '#66ff99', priority: 2, mode: 'Linear' },
+  'XW-2B': { norad: 40911, name: 'XW-2B (CAS-3B)', color: '#66ffcc', priority: 2, mode: 'Linear' },
+  'XW-2C': { norad: 40906, name: 'XW-2C (CAS-3C)', color: '#99ffcc', priority: 2, mode: 'Linear' },
+  'XW-2D': { norad: 40907, name: 'XW-2D (CAS-3D)', color: '#99ff99', priority: 2, mode: 'Linear' },
+  'XW-2E': { norad: 40909, name: 'XW-2E (CAS-3E)', color: '#ccff99', priority: 2, mode: 'Linear' },
+  'XW-2F': { norad: 40910, name: 'XW-2F (CAS-3F)', color: '#ccffcc', priority: 2, mode: 'Linear' },
+  
+  // CAS (Chinese Amateur Satellites)
+  'CAS-4A': { norad: 42761, name: 'CAS-4A', color: '#9966ff', priority: 2, mode: 'Linear' },
+  'CAS-4B': { norad: 42759, name: 'CAS-4B', color: '#9933ff', priority: 2, mode: 'Linear' },
+  'CAS-6': { norad: 44881, name: 'CAS-6 (TO-108)', color: '#cc66ff', priority: 2, mode: 'Linear' },
+  
+  // GreenCube / IO satellites
+  'IO-117': { norad: 53106, name: 'IO-117 (GreenCube)', color: '#00ff99', priority: 2, mode: 'Digipeater' },
+  
+  // TEVEL constellation
+  'TEVEL-1': { norad: 50988, name: 'TEVEL-1', color: '#66ccff', priority: 3, mode: 'FM' },
+  'TEVEL-2': { norad: 50989, name: 'TEVEL-2', color: '#66ddff', priority: 3, mode: 'FM' },
+  'TEVEL-3': { norad: 50994, name: 'TEVEL-3', color: '#66eeff', priority: 3, mode: 'FM' },
+  'TEVEL-4': { norad: 50998, name: 'TEVEL-4', color: '#77ccff', priority: 3, mode: 'FM' },
+  'TEVEL-5': { norad: 51062, name: 'TEVEL-5', color: '#77ddff', priority: 3, mode: 'FM' },
+  'TEVEL-6': { norad: 51063, name: 'TEVEL-6', color: '#77eeff', priority: 3, mode: 'FM' },
+  'TEVEL-7': { norad: 51069, name: 'TEVEL-7', color: '#88ccff', priority: 3, mode: 'FM' },
+  'TEVEL-8': { norad: 51084, name: 'TEVEL-8', color: '#88ddff', priority: 3, mode: 'FM' },
+  
+  // OSCAR satellites
+  'AO-27': { norad: 22825, name: 'AO-27', color: '#ff9966', priority: 3, mode: 'FM' },
+  'AO-73': { norad: 39444, name: 'AO-73 (FUNcube-1)', color: '#ffcc66', priority: 3, mode: 'Linear/Telemetry' },
+  'EO-88': { norad: 42017, name: 'EO-88 (Nayif-1)', color: '#ffaa66', priority: 3, mode: 'Linear/Telemetry' },
+  
+  // Russian satellites
+  'RS-15': { norad: 23439, name: 'RS-15', color: '#ff6666', priority: 3, mode: 'Linear' },
+  
+  // QO-100 (Geostationary - special)
+  'QO-100': { norad: 43700, name: 'QO-100 (Es\'hail-2)', color: '#ffff00', priority: 1, mode: 'Linear (GEO)' },
+  
+  // APRS Digipeaters
+  'ARISS': { norad: 25544, name: 'ARISS (ISS)', color: '#00ffff', priority: 1, mode: 'APRS' },
+  
+  // Cubesats with amateur payloads
+  'UVSQ-SAT': { norad: 47438, name: 'UVSQ-SAT', color: '#ff66ff', priority: 4, mode: 'Telemetry' },
+  'MEZNSAT': { norad: 46489, name: 'MeznSat', color: '#66ff66', priority: 4, mode: 'Telemetry' },
+  
+  // SSTV/Slow Scan
+  'SSTV-ISS': { norad: 25544, name: 'ISS SSTV', color: '#00ffff', priority: 2, mode: 'SSTV' }
 };
 
 // Cache for TLE data (refresh every 6 hours)
@@ -2793,14 +2850,17 @@ app.get('/api/config', (req, res) => {
 // ============================================
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  const indexPath = process.env.NODE_ENV === 'production'
+    ? path.join(__dirname, 'dist', 'index.html')
+    : path.join(__dirname, 'public', 'index.html');
+  res.sendFile(indexPath);
 });
 
 // ============================================
 // START SERVER
 // ============================================
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('╔═══════════════════════════════════════════════════════╗');
   console.log('║                                                       ║');

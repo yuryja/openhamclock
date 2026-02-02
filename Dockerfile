@@ -2,7 +2,7 @@
 # Multi-stage build for optimized production image
 
 # ============================================
-# Stage 1: Build
+# Stage 1: Build Frontend
 # ============================================
 FROM node:20-alpine AS builder
 
@@ -11,8 +11,14 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --omit=dev
+# Install ALL dependencies (including devDependencies for Vite)
+RUN npm install
+
+# Copy source files
+COPY . .
+
+# Build the React app with Vite
+RUN npm run build
 
 # ============================================
 # Stage 2: Production
@@ -29,12 +35,18 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
-# Copy node_modules from builder
-COPY --from=builder /app/node_modules ./node_modules
-
-# Copy application files
+# Copy package files and install production deps only
 COPY package*.json ./
+RUN npm install --omit=dev
+
+# Copy server files
 COPY server.js ./
+COPY config.js ./
+
+# Copy built frontend from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Copy public folder (for monolithic fallback reference)
 COPY public ./public
 
 # Set ownership
