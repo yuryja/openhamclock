@@ -11,7 +11,7 @@ export const SolarPanel = ({ solarIndices }) => {
       return saved === 'indices';
     } catch (e) { return false; }
   });
-  const [imageType, setImageType] = useState('0193'); // AIA 193 (corona)
+  const [imageType, setImageType] = useState('0193');
   
   const toggleMode = () => {
     const newMode = !showIndices;
@@ -21,7 +21,6 @@ export const SolarPanel = ({ solarIndices }) => {
     } catch (e) {}
   };
   
-  // SDO/AIA image types
   const imageTypes = {
     '0193': { name: 'AIA 193Å', desc: 'Corona' },
     '0304': { name: 'AIA 304Å', desc: 'Chromosphere' },
@@ -30,7 +29,6 @@ export const SolarPanel = ({ solarIndices }) => {
     'HMIIC': { name: 'HMI Int', desc: 'Visible' }
   };
   
-  // SDO images update every ~15 minutes
   const timestamp = Math.floor(Date.now() / 900000) * 900000;
   const imageUrl = `https://sdo.gsfc.nasa.gov/assets/img/latest/latest_256_${imageType}.jpg?t=${timestamp}`;
   
@@ -41,6 +39,9 @@ export const SolarPanel = ({ solarIndices }) => {
     if (value >= 3) return '#88cc00';
     return '#00ff88';
   };
+
+  // Get K-Index data - server returns 'kp' not 'kIndex'
+  const kpData = solarIndices?.data?.kp || solarIndices?.data?.kIndex;
 
   return (
     <div className="panel" style={{ padding: '8px' }}>
@@ -131,23 +132,43 @@ export const SolarPanel = ({ solarIndices }) => {
               <div style={{ background: 'var(--bg-tertiary)', borderRadius: '6px', padding: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ minWidth: '60px' }}>
                   <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>K-Index</div>
-                  <div style={{ fontSize: '22px', fontWeight: '700', color: getKpColor(solarIndices.data.kIndex?.current), fontFamily: 'Orbitron, monospace' }}>
-                    {solarIndices.data.kIndex?.current ?? '--'}
+                  <div style={{ fontSize: '22px', fontWeight: '700', color: getKpColor(kpData?.current), fontFamily: 'Orbitron, monospace' }}>
+                    {kpData?.current ?? '--'}
                   </div>
                 </div>
                 <div style={{ flex: 1 }}>
-                  {solarIndices.data.kIndex?.forecast?.length > 0 && (
+                  {kpData?.forecast?.length > 0 ? (
                     <div style={{ display: 'flex', gap: '2px', alignItems: 'flex-end', height: '30px' }}>
-                      {solarIndices.data.kIndex.forecast.slice(0, 8).map((kp, i) => (
-                        <div key={i} style={{
-                          flex: 1,
-                          height: `${Math.max(10, (kp / 9) * 100)}%`,
-                          background: getKpColor(kp),
-                          borderRadius: '2px',
-                          opacity: 0.8
-                        }} title={`Kp ${kp}`} />
-                      ))}
+                      {kpData.forecast.slice(0, 8).map((item, i) => {
+                        const val = typeof item === 'object' ? item.value : item;
+                        return (
+                          <div key={i} style={{
+                            flex: 1,
+                            height: `${Math.max(10, (val / 9) * 100)}%`,
+                            background: getKpColor(val),
+                            borderRadius: '2px',
+                            opacity: 0.8
+                          }} title={`Kp ${val}`} />
+                        );
+                      })}
                     </div>
+                  ) : kpData?.history?.length > 0 ? (
+                    <div style={{ display: 'flex', gap: '2px', alignItems: 'flex-end', height: '30px' }}>
+                      {kpData.history.slice(-8).map((item, i) => {
+                        const val = typeof item === 'object' ? item.value : item;
+                        return (
+                          <div key={i} style={{
+                            flex: 1,
+                            height: `${Math.max(10, (val / 9) * 100)}%`,
+                            background: getKpColor(val),
+                            borderRadius: '2px',
+                            opacity: 0.8
+                          }} title={`Kp ${val}`} />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--text-muted)', fontSize: '10px' }}>No forecast data</div>
                   )}
                 </div>
               </div>

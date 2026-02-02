@@ -290,7 +290,7 @@ export const WorldMap = ({
           if (showDXLabels || isHovered) {
             const labelIcon = L.divIcon({
               className: '',
-              html: `<div style="background: ${isHovered ? '#fff' : color}; color: ${isHovered ? color : '#000'}; padding: 2px 6px; border-radius: 3px; font-family: JetBrains Mono; font-size: 11px; font-weight: 600; white-space: nowrap;">${path.dxCall}</div>`,
+              html: `<div style="background: ${isHovered ? '#fff' : color}; color: ${isHovered ? color : '#000'}; padding: 3px 8px; border-radius: 4px; font-family: JetBrains Mono; font-size: 11px; font-weight: 700; white-space: nowrap; border: 1px solid ${isHovered ? color : 'rgba(0,0,0,0.3)'};">${path.dxCall}</div>`,
               iconAnchor: [0, -10]
             });
             const label = L.marker([path.dxLat, path.dxLon], { icon: labelIcon, interactive: false }).addTo(map);
@@ -438,34 +438,47 @@ export const WorldMap = ({
         background: 'rgba(0, 0, 0, 0.85)',
         border: '1px solid #444',
         borderRadius: '6px',
-        padding: '6px 12px',
+        padding: '8px 14px',
         zIndex: 1000,
         display: 'flex',
-        gap: '12px',
+        gap: '10px',
         alignItems: 'center',
-        fontSize: '10px',
+        fontSize: '12px',
         fontFamily: 'JetBrains Mono, monospace'
       }}>
         {showDXPaths && (
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <span style={{ color: '#888' }}>DX:</span>
-            <span style={{ color: '#ff6666' }}>160m</span>
-            <span style={{ color: '#ffcc66' }}>40m</span>
-            <span style={{ color: '#66ff99' }}>20m</span>
-            <span style={{ color: '#66ccff' }}>15m</span>
-            <span style={{ color: '#9966ff' }}>10m</span>
+            <span style={{ background: '#ff6666', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>160m</span>
+            <span style={{ background: '#ff9966', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>80m</span>
+            <span style={{ background: '#ffcc66', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>40m</span>
+            <span style={{ background: '#ccff66', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>30m</span>
+            <span style={{ background: '#66ff99', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>20m</span>
+            <span style={{ background: '#66ffcc', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>17m</span>
+            <span style={{ background: '#66ccff', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>15m</span>
+            <span style={{ background: '#6699ff', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>12m</span>
+            <span style={{ background: '#9966ff', color: '#fff', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>10m</span>
+            <span style={{ background: '#cc66ff', color: '#fff', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>6m</span>
           </div>
         )}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ background: '#00aaff', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>● DE</span>
+          <span style={{ background: '#ff8800', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>● DX</span>
+        </div>
         {showPOTA && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            <span style={{ color: '#aa66ff' }}>● POTA</span>
+            <span style={{ background: '#aa66ff', color: '#fff', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>● POTA</span>
           </div>
         )}
         {showSatellites && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            <span style={{ color: '#00ffff' }}>🛰 SAT</span>
+            <span style={{ background: '#00ffff', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>🛰 SAT</span>
           </div>
         )}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <span style={{ color: '#ffcc00' }}>☀ Sun</span>
+          <span style={{ color: '#aaaaaa' }}>🌙 Moon</span>
+        </div>
       </div>
     </div>
   );
