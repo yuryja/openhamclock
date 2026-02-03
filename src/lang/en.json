@@ -9,6 +9,7 @@
   "station.settings.language.ja": "日本語",
   "station.settings.language.it": "Italiano",
   "station.settings.language.nl": "Nederlands",
+  "station.settings.language.ko": "한국어",
   "station.settings.altitude": "Altitude (m)",
   "station.settings.antenna": "Antenna",
   "station.settings.button.save": "Save Settings",
@@ -46,5 +47,12 @@
   "station.settings.useLocation": "📍 Use my current location",
   "station.settings.useLocation.error1": "Could not get location. Please enter manually.",
   "station.settings.useLocation.error2": "Geolocation is not supported by your browser.",
-  "station.settings.welcome": "👋 Welcome to OpenHamClock!"
+  "station.settings.welcome": "👋 Welcome to OpenHamClock!",
+  "plugins.layers.aurora.name": "Aurora Forecast",
+  "plugins.layers.aurora.description": "NOAA OVATION aurora probability forecast (30-min)",
+  "plugins.layers.earthquakes.name": "Earthquakes",
+  "plugins.layers.earthquakes.description": "Live USGS earthquake data (M2.5+ from last 24 hours)",
+  "plugins.layers.wxradar.name": "Weather Radar",
+  "plugins.layers.wxradar.description": "NEXRAD weather radar overlay for North America",
+  "plugins.layers.wxradar.attribution": "Weather data © Iowa State University Mesonet"
 }
