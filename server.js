@@ -263,6 +263,82 @@ function logErrorOnce(category, message) {
   return false;
 }
 
+// ============================================
+// VISITOR TRACKING
+// ============================================
+// Lightweight in-memory visitor counter — tracks unique IPs per day
+// No cookies, no external analytics, no persistent storage
+// Resets on server restart; logs daily summary
+
+const visitorStats = {
+  today: new Date().toISOString().slice(0, 10),  // YYYY-MM-DD
+  uniqueIPs: new Set(),
+  totalRequests: 0,
+  allTimeVisitors: 0,    // Cumulative unique visitors since server start
+  allTimeRequests: 0,    // Cumulative requests since server start
+  serverStarted: new Date().toISOString(),
+  history: []  // Last 30 days of { date, uniqueVisitors, totalRequests }
+};
+
+function rolloverVisitorStats() {
+  const now = new Date().toISOString().slice(0, 10);
+  if (now !== visitorStats.today) {
+    // Save yesterday's stats to history
+    visitorStats.history.push({
+      date: visitorStats.today,
+      uniqueVisitors: visitorStats.uniqueIPs.size,
+      totalRequests: visitorStats.totalRequests
+    });
+    // Keep only last 30 days
+    if (visitorStats.history.length > 30) {
+      visitorStats.history = visitorStats.history.slice(-30);
+    }
+    const avg = visitorStats.history.length > 0
+      ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+      : 0;
+    console.log(`[Visitors] Daily summary for ${visitorStats.today}: ${visitorStats.uniqueIPs.size} unique visitors, ${visitorStats.totalRequests} requests | All-time: ${visitorStats.allTimeVisitors} visitors, ${visitorStats.allTimeRequests} requests | ${visitorStats.history.length}-day avg: ${avg}/day`);
+    // Reset daily counters for new day
+    visitorStats.today = now;
+    visitorStats.uniqueIPs = new Set();
+    visitorStats.totalRequests = 0;
+  }
+}
+
+// Visitor tracking middleware — only counts page loads and API config fetches
+// (not every API poll, which would inflate the count)
+app.use((req, res, next) => {
+  rolloverVisitorStats();
+  
+  // Only count meaningful "visits" — initial page load or config fetch
+  // This avoids counting every 5-second DX cluster poll as a "visit"
+  const countableRoutes = ['/', '/index.html', '/api/config'];
+  if (countableRoutes.includes(req.path)) {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || 'unknown';
+    const isNew = !visitorStats.uniqueIPs.has(ip);
+    visitorStats.uniqueIPs.add(ip);
+    visitorStats.totalRequests++;
+    visitorStats.allTimeRequests++;
+    
+    if (isNew) {
+      visitorStats.allTimeVisitors++;
+      logInfo(`[Visitors] New visitor today (#${visitorStats.uniqueIPs.size}, #${visitorStats.allTimeVisitors} all-time) from ${ip.replace(/\d+$/, 'x')}`);
+    }
+  }
+  
+  next();
+});
+
+// Log visitor count every hour
+setInterval(() => {
+  rolloverVisitorStats();
+  if (visitorStats.uniqueIPs.size > 0 || visitorStats.allTimeVisitors > 0) {
+    const avg = visitorStats.history.length > 0
+      ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+      : visitorStats.uniqueIPs.size;
+    console.log(`[Visitors] Today so far: ${visitorStats.uniqueIPs.size} unique, ${visitorStats.totalRequests} requests | All-time: ${visitorStats.allTimeVisitors} visitors | Avg: ${avg}/day`);
+  }
+}, 60 * 60 * 1000);
+
 // Serve static files
 // dist/ contains the built React app (from npm run build)
 // public/ contains the fallback page if build hasn't run
@@ -2275,6 +2351,144 @@ app.get('/api/pskreporter/:callsign', async (req, res) => {
     });
   }
 });
+
+// ============================================
+// WSPR PROPAGATION HEATMAP API
+// ============================================
+
+// WSPR heatmap endpoint - gets global propagation data
+// Uses PSK Reporter to fetch WSPR mode spots from the last N minutes
+let wsprCache = { data: null, timestamp: 0 };
+const WSPR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+
+app.get('/api/wspr/heatmap', async (req, res) => {
+  const minutes = parseInt(req.query.minutes) || 30; // Default 30 minutes
+  const band = req.query.band || 'all'; // all, 20m, 40m, etc.
+  const now = Date.now();
+  
+  // Return cached data if fresh
+  const cacheKey = `${minutes}:${band}`;
+  if (wsprCache.data && 
+      wsprCache.data.cacheKey === cacheKey && 
+      (now - wsprCache.timestamp) < WSPR_CACHE_TTL) {
+    return res.json({ ...wsprCache.data.result, cached: true });
+  }
+  
+  try {
+    const flowStartSeconds = -Math.abs(minutes * 60);
+    // Query PSK Reporter for WSPR mode spots (no specific callsign filter)
+    // Get data from multiple popular WSPR frequencies to build heatmap
+    const url = `https://retrieve.pskreporter.info/query?mode=WSPR&flowStartSeconds=${flowStartSeconds}&rronly=1&nolocator=0&appcontact=openhamclock&rptlimit=2000`;
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    
+    const response = await fetch(url, {
+      headers: { 
+        'User-Agent': 'OpenHamClock/3.12 (Amateur Radio Dashboard)',
+        'Accept': '*/*'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const xml = await response.text();
+    const spots = [];
+    
+    // Parse XML response
+    const reportRegex = /<receptionReport[^>]*>/g;
+    let match;
+    while ((match = reportRegex.exec(xml)) !== null) {
+      const report = match[0];
+      const getAttr = (name) => {
+        const m = report.match(new RegExp(`${name}="([^"]*)"`));
+        return m ? m[1] : null;
+      };
+      
+      const receiverCallsign = getAttr('receiverCallsign');
+      const receiverLocator = getAttr('receiverLocator');
+      const senderCallsign = getAttr('senderCallsign');
+      const senderLocator = getAttr('senderLocator');
+      const frequency = getAttr('frequency');
+      const mode = getAttr('mode');
+      const flowStartSecs = getAttr('flowStartSeconds');
+      const sNR = getAttr('sNR');
+      
+      if (receiverCallsign && senderCallsign && senderLocator && receiverLocator) {
+        const freq = frequency ? parseInt(frequency) : null;
+        const spotBand = freq ? getBandFromHz(freq) : 'Unknown';
+        
+        // Filter by band if specified
+        if (band !== 'all' && spotBand !== band) continue;
+        
+        const senderLoc = gridToLatLonSimple(senderLocator);
+        const receiverLoc = gridToLatLonSimple(receiverLocator);
+        
+        if (senderLoc && receiverLoc) {
+          spots.push({
+            sender: senderCallsign,
+            senderGrid: senderLocator,
+            senderLat: senderLoc.lat,
+            senderLon: senderLoc.lon,
+            receiver: receiverCallsign,
+            receiverGrid: receiverLocator,
+            receiverLat: receiverLoc.lat,
+            receiverLon: receiverLoc.lon,
+            freq: freq,
+            freqMHz: freq ? (freq / 1000000).toFixed(3) : null,
+            band: spotBand,
+            snr: sNR ? parseInt(sNR) : null,
+            timestamp: flowStartSecs ? parseInt(flowStartSecs) * 1000 : Date.now(),
+            age: flowStartSecs ? Math.floor((Date.now() / 1000 - parseInt(flowStartSecs)) / 60) : 0
+          });
+        }
+      }
+    }
+    
+    // Sort by timestamp (newest first)
+    spots.sort((a, b) => b.timestamp - a.timestamp);
+    
+    const result = {
+      count: spots.length,
+      spots: spots,
+      minutes: minutes,
+      band: band,
+      timestamp: new Date().toISOString(),
+      source: 'pskreporter'
+    };
+    
+    // Cache it
+    wsprCache = { 
+      data: { result, cacheKey }, 
+      timestamp: now 
+    };
+    
+    console.log(`[WSPR Heatmap] Found ${spots.length} WSPR spots (${minutes}min, band: ${band})`);
+    res.json(result);
+    
+  } catch (error) {
+    logErrorOnce('WSPR Heatmap', error.message);
+    
+    // Return cached data if available
+    if (wsprCache.data && wsprCache.data.cacheKey === cacheKey) {
+      return res.json({ ...wsprCache.data.result, cached: true, stale: true });
+    }
+    
+    // Return empty result
+    res.json({ 
+      count: 0, 
+      spots: [],
+      minutes,
+      band,
+      error: error.message 
+    });
+  }
+});
+
 // ============================================
 // SATELLITE TRACKING API
 // ============================================
@@ -3593,11 +3807,29 @@ function getLastWeekendOfMonth(year, month) {
 // ============================================
 
 app.get('/api/health', (req, res) => {
+  rolloverVisitorStats();
+  const avg = visitorStats.history.length > 0
+    ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
+    : visitorStats.uniqueIPs.size;
   res.json({
     status: 'ok',
     version: APP_VERSION,
     uptime: process.uptime(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    visitors: {
+      today: {
+        date: visitorStats.today,
+        uniqueVisitors: visitorStats.uniqueIPs.size,
+        totalRequests: visitorStats.totalRequests
+      },
+      allTime: {
+        since: visitorStats.serverStarted,
+        uniqueVisitors: visitorStats.allTimeVisitors,
+        totalRequests: visitorStats.allTimeRequests
+      },
+      dailyAverage: avg,
+      history: visitorStats.history
+    }
   });
 });
 
