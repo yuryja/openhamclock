@@ -1590,21 +1590,57 @@ function extractGridFromComment(comment) {
 function estimateLocationFromPrefix(callsign) {
   if (!callsign) return null;
   
+  // Handle slash/portable callsigns: TI5/N3KS, F/G3ABC, W1ABC/7, N3KS/P
+  let lookupCall = callsign.toUpperCase().trim();
+  if (lookupCall.includes('/')) {
+    const parts = lookupCall.split('/');
+    // Common suffixes to ignore (operating modifiers, not location)
+    const modifierSuffixes = ['P', 'M', 'MM', 'AM', 'QRP', 'R', 'T', 'B', 'LH'];
+    
+    if (parts.length === 2) {
+      const [left, right] = parts;
+      
+      // Right side is a modifier suffix like /P, /M, /MM, /QRP
+      if (modifierSuffixes.includes(right)) {
+        lookupCall = left;
+      }
+      // Right side is a single digit (district change): W1ABC/7
+      else if (/^\d$/.test(right)) {
+        // Replace the district digit in the callsign
+        lookupCall = left.replace(/\d/, right);
+      }
+      // Left side looks like a short prefix (1-4 chars, e.g. TI5/, F/, VP8/)
+      // and right side looks like a full callsign
+      else if (left.length <= 4 && right.length > left.length) {
+        lookupCall = left; // Use the operating prefix (TI5, F, VP8, etc.)
+      }
+      // Right side looks like a short prefix and left is the full callsign
+      else if (right.length <= 4 && left.length > right.length) {
+        lookupCall = right;
+      }
+      // Default: use the longer part (more likely the actual callsign)
+      else {
+        lookupCall = left.length >= right.length ? left : right;
+      }
+    }
+  }
+  
+  const upper = lookupCall.toUpperCase();
+  
   // Comprehensive prefix to grid mapping
-  // Uses typical/central grid for each prefix area
+  // Uses typical/central grid for each DXCC entity
   const prefixGrids = {
-    // USA - by call district
-    'W1': 'FN41', 'K1': 'FN41', 'N1': 'FN41', 'AA1': 'FN41', // New England
-    'W2': 'FN20', 'K2': 'FN20', 'N2': 'FN20', 'AA2': 'FN20', // NY/NJ
-    'W3': 'FM19', 'K3': 'FM19', 'N3': 'FM19', 'AA3': 'FM19', // PA/MD/DE
-    'W4': 'EM73', 'K4': 'EM73', 'N4': 'EM73', 'AA4': 'EM73', // SE USA
-    'W5': 'EM12', 'K5': 'EM12', 'N5': 'EM12', 'AA5': 'EM12', // TX/OK/LA/AR/MS
-    'W6': 'CM97', 'K6': 'CM97', 'N6': 'CM97', 'AA6': 'CM97', // California
-    'W7': 'DN31', 'K7': 'DN31', 'N7': 'DN31', 'AA7': 'DN31', // Pacific NW/Mountain
-    'W8': 'EN81', 'K8': 'EN81', 'N8': 'EN81', 'AA8': 'EN81', // MI/OH/WV
-    'W9': 'EN52', 'K9': 'EN52', 'N9': 'EN52', 'AA9': 'EN52', // IL/IN/WI
-    'W0': 'EN31', 'K0': 'EN31', 'N0': 'EN31', 'AA0': 'EN31', // Central USA
-    // Generic USA (no district) - AA through AL are all US prefixes
+    // === USA - by call district ===
+    'W1': 'FN41', 'K1': 'FN41', 'N1': 'FN41', 'AA1': 'FN41',
+    'W2': 'FN20', 'K2': 'FN20', 'N2': 'FN20', 'AA2': 'FN20',
+    'W3': 'FM19', 'K3': 'FM19', 'N3': 'FM19', 'AA3': 'FM19',
+    'W4': 'EM73', 'K4': 'EM73', 'N4': 'EM73', 'AA4': 'EM73',
+    'W5': 'EM12', 'K5': 'EM12', 'N5': 'EM12', 'AA5': 'EM12',
+    'W6': 'CM97', 'K6': 'CM97', 'N6': 'CM97', 'AA6': 'CM97',
+    'W7': 'DN31', 'K7': 'DN31', 'N7': 'DN31', 'AA7': 'DN31',
+    'W8': 'EN81', 'K8': 'EN81', 'N8': 'EN81', 'AA8': 'EN81',
+    'W9': 'EN52', 'K9': 'EN52', 'N9': 'EN52', 'AA9': 'EN52',
+    'W0': 'EN31', 'K0': 'EN31', 'N0': 'EN31', 'AA0': 'EN31',
     'W': 'EM79', 'K': 'EM79', 'N': 'EM79', 
     'AA': 'EM79', 'AB': 'EM79', 'AC': 'EM79', 'AD': 'EM79', 'AE': 'EM79', 'AF': 'EM79',
     'AG': 'EM79', 'AH': 'EM79', 'AI': 'EM79', 'AJ': 'EM79', 'AK': 'EM79', 'AL': 'EM79',
@@ -1626,133 +1662,318 @@ function estimateLocationFromPrefix(callsign) {
     'AK0': 'EN31', 'AK1': 'FN41', 'AK2': 'FN20', 'AK3': 'FM19', 'AK4': 'EM73',
     'AK5': 'EM12', 'AK6': 'CM97', 'AK7': 'DN31', 'AK8': 'EN81', 'AK9': 'EN52',
     'AL0': 'EN31', 'AL1': 'FN41', 'AL2': 'FN20', 'AL3': 'FM19', 'AL4': 'EM73',
-    'AL5': 'EM12', 'AL6': 'CM97', 'AL7': 'BP51', 'AL8': 'EN81', 'AL9': 'EN52', // AL7 = Alaska
+    'AL5': 'EM12', 'AL6': 'CM97', 'AL7': 'BP51', 'AL8': 'EN81', 'AL9': 'EN52',
     
-    // Canada - by province
-    'VE1': 'FN74', 'VA1': 'FN74', // Maritime
-    'VE2': 'FN35', 'VA2': 'FN35', // Quebec
-    'VE3': 'FN03', 'VA3': 'FN03', // Ontario
-    'VE4': 'EN19', 'VA4': 'EN19', // Manitoba
-    'VE5': 'DO51', 'VA5': 'DO51', // Saskatchewan
-    'VE6': 'DO33', 'VA6': 'DO33', // Alberta
-    'VE7': 'CN89', 'VA7': 'CN89', // British Columbia
-    'VE8': 'DP31', 'VA8': 'DP31', // NWT
-    'VE9': 'FN65', 'VA9': 'FN65', // New Brunswick
-    'VY1': 'CP28', // Yukon
-    'VY2': 'FN86', // PEI
-    'VO1': 'GN37', 'VO2': 'GO17', // Newfoundland/Labrador
-    'VE': 'FN03', 'VA': 'FN03', // Generic Canada
+    // === US Territories ===
+    'KH0': 'QK25', 'KH1': 'BL01', 'KH2': 'QK24', 'KH3': 'BJ11', 'KH4': 'BL01',
+    'KH5': 'BL01', 'KH6': 'BL01', 'KH7': 'BL01', 'KH8': 'AH37', 'KH9': 'BK29',
+    'KP1': 'FK68', 'KP2': 'FK77', 'KP3': 'FK68', 'KP4': 'FK68', 'KP5': 'FK85',
+    'KL7': 'BP51', 'NL7': 'BP51', 'WL7': 'BP51', 'KL': 'BP51', // Alaska
+    'NP4': 'FK68', 'WP4': 'FK68', 'NP3': 'FK68', 'WP3': 'FK68', // Puerto Rico
     
-    // UK & Ireland
-    'G': 'IO91', 'M': 'IO91', '2E': 'IO91', 'GW': 'IO81', // England/Wales
+    // === Canada - by province ===
+    'VE1': 'FN74', 'VA1': 'FN74',
+    'VE2': 'FN35', 'VA2': 'FN35',
+    'VE3': 'FN03', 'VA3': 'FN03',
+    'VE4': 'EN19', 'VA4': 'EN19',
+    'VE5': 'DO51', 'VA5': 'DO51',
+    'VE6': 'DO33', 'VA6': 'DO33',
+    'VE7': 'CN89', 'VA7': 'CN89',
+    'VE8': 'DP31', 'VA8': 'DP31',
+    'VE9': 'FN65', 'VA9': 'FN65',
+    'VY1': 'CP28', 'VY2': 'FN86',
+    'VO1': 'GN37', 'VO2': 'GO17',
+    'VE': 'FN03', 'VA': 'FN03',
+    'CY0': 'FN93', // Sable Island
+    'CY9': 'GN06', // St. Paul Island
+    
+    // === UK & Ireland ===
+    'G': 'IO91', 'M': 'IO91', '2E': 'IO91', // England
+    'GW': 'IO81', 'MW': 'IO81', '2W': 'IO81', // Wales
     'GM': 'IO85', 'MM': 'IO85', '2M': 'IO85', // Scotland
     'GI': 'IO64', 'MI': 'IO64', '2I': 'IO64', // N. Ireland
+    'GD': 'IO74', 'MD': 'IO74', '2D': 'IO74', // Isle of Man
+    'GJ': 'IN89', 'MJ': 'IN89', '2J': 'IN89', // Jersey
+    'GU': 'IN89', 'MU': 'IN89', '2U': 'IN89', // Guernsey
     'EI': 'IO63', 'EJ': 'IO63', // Ireland
+    'GS': 'IO85', 'MS': 'IO85', // Scotland special
+    'GB': 'IO91', // UK special event
+    'GX': 'IO91', // UK special
     
-    // Germany
-    'DL': 'JO51', 'DJ': 'JO51', 'DK': 'JO51', 'DA': 'JO51', 'DB': 'JO51', 'DC': 'JO51', 'DD': 'JO51', 'DF': 'JO51', 'DG': 'JO51', 'DH': 'JO51', 'DO': 'JO51',
+    // === Germany ===
+    'DL': 'JO51', 'DJ': 'JO51', 'DK': 'JO51', 'DA': 'JO51', 'DB': 'JO51', 
+    'DC': 'JO51', 'DD': 'JO51', 'DF': 'JO51', 'DG': 'JO51', 'DH': 'JO51', 
+    'DI': 'JO51', 'DM': 'JO51', 'DN': 'JO51', 'DO': 'JO51', 'DP': 'JO51', 'DR': 'JO51',
     
-    // Rest of Europe
-    'F': 'JN18', // France
-    'I': 'JN61', 'IK': 'JN45', 'IZ': 'JN61', // Italy
-    'EA': 'IN80', 'EC': 'IN80', 'EB': 'IN80', // Spain
-    'CT': 'IM58', // Portugal
-    'PA': 'JO21', 'PD': 'JO21', 'PE': 'JO21', 'PH': 'JO21', // Netherlands
-    'ON': 'JO20', 'OO': 'JO20', 'OR': 'JO20', 'OT': 'JO20', // Belgium
+    // === Rest of Europe ===
+    'F': 'JN18', 'TM': 'JN18', // France
+    'I': 'JN61', 'IK': 'JN45', 'IZ': 'JN61', 'IU': 'JN61', 'IW': 'JN61', 'IX': 'JN61', // Italy
+    'IS': 'JM49', 'IM': 'JM49', // Sardinia
+    'IT9': 'JM68', // Sicily
+    'EA': 'IN80', 'EC': 'IN80', 'EB': 'IN80', 'ED': 'IN80', 'EE': 'IN80', 'EF': 'IN80', 'EG': 'IN80', 'EH': 'IN80', // Spain
+    'EA6': 'JM19', // Balearic Islands
+    'EA8': 'IL18', // Canary Islands
+    'EA9': 'IM75', // Ceuta & Melilla
+    'CT': 'IM58', 'CS': 'IM58', 'CQ': 'IM58', // Portugal
+    'CT3': 'IM12', // Madeira
+    'CU': 'HM58', // Azores
+    'PA': 'JO21', 'PD': 'JO21', 'PE': 'JO21', 'PH': 'JO21', 'PI': 'JO21', // Netherlands
+    'ON': 'JO20', 'OO': 'JO20', 'OR': 'JO20', 'OT': 'JO20', 'OP': 'JO20', // Belgium
+    'LX': 'JN39', // Luxembourg
     'HB': 'JN47', 'HB9': 'JN47', // Switzerland
+    'HB0': 'JN47', // Liechtenstein
+    'HE': 'JN47', // Switzerland special
     'OE': 'JN78', // Austria
-    'OZ': 'JO55', 'OU': 'JO55', // Denmark
-    'SM': 'JO89', 'SA': 'JO89', 'SB': 'JO89', 'SE': 'JO89', // Sweden
-    'LA': 'JO59', 'LB': 'JO59', // Norway
-    'OH': 'KP20', 'OF': 'KP20', 'OG': 'KP20', 'OI': 'KP20', // Finland
-    'SP': 'JO91', 'SQ': 'JO91', 'SO': 'JO91', '3Z': 'JO91', // Poland
+    'OZ': 'JO55', 'OU': 'JO55', 'OV': 'JO55', 'OW': 'JO55', 'OX': 'JO55', '5P': 'JO55', '5Q': 'JO55', // Denmark
+    'OX': 'GP46', // Greenland (override generic Denmark)
+    'OY': 'IP62', // Faroe Islands
+    'SM': 'JO89', 'SA': 'JO89', 'SB': 'JO89', 'SC': 'JO89', 'SD': 'JO89', 'SE': 'JO89', 'SF': 'JO89', 'SG': 'JO89', 'SH': 'JO89', 'SI': 'JO89', 'SJ': 'JO89', 'SK': 'JO89', 'SL': 'JO89', // Sweden
+    'LA': 'JO59', 'LB': 'JO59', 'LC': 'JO59', 'LD': 'JO59', 'LE': 'JO59', 'LF': 'JO59', 'LG': 'JO59', 'LH': 'JO59', 'LI': 'JO59', 'LJ': 'JO59', 'LK': 'JO59', 'LL': 'JO59', 'LM': 'JO59', 'LN': 'JO59', // Norway
+    'JW': 'JQ78', // Svalbard
+    'JX': 'IQ50', // Jan Mayen
+    'OH': 'KP20', 'OF': 'KP20', 'OG': 'KP20', 'OH0': 'JP90', 'OI': 'KP20', // Finland, Aland
+    'SP': 'JO91', 'SQ': 'JO91', 'SO': 'JO91', 'SN': 'JO91', '3Z': 'JO91', 'HF': 'JO91', // Poland
     'OK': 'JN79', 'OL': 'JN79', // Czech Republic
     'OM': 'JN88', // Slovakia
     'HA': 'JN97', 'HG': 'JN97', // Hungary
-    'YO': 'KN34', // Romania
+    'YO': 'KN34', 'YP': 'KN34', 'YQ': 'KN34', 'YR': 'KN34', // Romania
     'LZ': 'KN22', // Bulgaria
-    'YU': 'KN04', // Serbia
+    'YU': 'KN04', 'YT': 'KN04', // Serbia
+    'Z3': 'KN11', // North Macedonia
     '9A': 'JN75', // Croatia
     'S5': 'JN76', // Slovenia
-    'SV': 'KM17', 'SX': 'KM17', // Greece
+    'T9': 'JN83', // Bosnia-Herzegovina
+    '4O': 'JN92', // Montenegro
+    'ZA': 'JN91', // Albania
+    'SV': 'KM17', 'SX': 'KM17', 'SY': 'KM17', 'SZ': 'KM17', 'SW': 'KM17', // Greece
+    'SV5': 'KM46', 'SV9': 'KM25', // Dodecanese, Crete
+    'J4': 'KM17', // Greece special
     '9H': 'JM75', // Malta
     'LY': 'KO24', // Lithuania
     'ES': 'KO29', // Estonia
     'YL': 'KO26', // Latvia
+    'TF': 'HP94', // Iceland
+    'TK': 'JN42', // Corsica
+    'TA': 'KN30', 'TC': 'KN30', 'TB': 'KN30', 'YM': 'KN30', // Turkey
+    'ER': 'KN46', // Moldova
+    '1A': 'JN61', // Sovereign Military Order of Malta
+    '4U': 'JN36', // United Nations (Geneva)
+    'T7': 'JN63', // San Marino
+    '3A': 'JN33', // Monaco
+    'C3': 'JN12', // Andorra
     
-    // Russia & Ukraine
-    'UA': 'KO85', 'RA': 'KO85', 'RU': 'KO85', 'RV': 'KO85', 'RW': 'KO85', 'RX': 'KO85', 'RZ': 'KO85',
+    // === Russia & CIS ===
+    'UA': 'KO85', 'RA': 'KO85', 'RU': 'KO85', 'RV': 'KO85', 'RW': 'KO85', 'RX': 'KO85', 'RZ': 'KO85', 'R1': 'KO85', 'R2': 'KO85', 'R3': 'KO85', 'R4': 'KO85', 'R5': 'KO85', 'R6': 'KO85',
     'UA0': 'OO33', 'RA0': 'OO33', 'R0': 'OO33', // Asiatic Russia
     'UA9': 'MO06', 'RA9': 'MO06', 'R9': 'MO06', // Ural
-    'UR': 'KO50', 'UT': 'KO50', 'UX': 'KO50', 'US': 'KO50', // Ukraine
+    'UR': 'KO50', 'UT': 'KO50', 'UX': 'KO50', 'US': 'KO50', 'UY': 'KO50', 'UW': 'KO50', // Ukraine
+    'EU': 'KO33', 'EV': 'KO33', 'EW': 'KO33', // Belarus
+    'UN': 'MN83', 'UP': 'MN83', 'UQ': 'MN83', // Kazakhstan
+    'EX': 'MN51', // Kyrgyzstan
+    'EY': 'MM38', // Tajikistan
+    'UK': 'MN41', // Uzbekistan
+    'EZ': 'LN99', // Turkmenistan
+    '4J': 'LN40', '4K': 'LN40', // Azerbaijan
+    '4L': 'LN11', // Georgia
+    'EK': 'LN20', // Armenia
     
-    // Japan - by call area
+    // === Japan ===
     'JA1': 'PM95', 'JH1': 'PM95', 'JR1': 'PM95', 'JE1': 'PM95', 'JF1': 'PM95', 'JG1': 'PM95', 'JI1': 'PM95', 'JJ1': 'PM95', 'JK1': 'PM95', 'JL1': 'PM95', 'JM1': 'PM95', 'JN1': 'PM95', 'JO1': 'PM95', 'JP1': 'PM95', 'JQ1': 'PM95', 'JS1': 'PM95', '7K1': 'PM95', '7L1': 'PM95', '7M1': 'PM95', '7N1': 'PM95',
     'JA2': 'PM84', 'JA3': 'PM74', 'JA4': 'PM64', 'JA5': 'PM63', 'JA6': 'PM53', 'JA7': 'QM07', 'JA8': 'QN02', 'JA9': 'PM86', 'JA0': 'PM97',
-    'JA': 'PM95', 'JH': 'PM95', 'JR': 'PM95', 'JE': 'PM95', 'JF': 'PM95', 'JG': 'PM95', // Generic Japan
+    'JA': 'PM95', 'JH': 'PM95', 'JR': 'PM95', 'JE': 'PM95', 'JF': 'PM95', 'JG': 'PM95', 'JI': 'PM95', 'JJ': 'PM95', 'JK': 'PM95', 'JL': 'PM95', 'JM': 'PM95', 'JN': 'PM95', 'JO': 'PM95', 'JP': 'PM95', 'JQ': 'PM95', 'JS': 'PM95',
+    '7J': 'PM95', '7K': 'PM95', '7L': 'PM95', '7M': 'PM95', '7N': 'PM95',
+    '8J': 'PM95', '8N': 'PM95', // Japan special event
     
-    // Rest of Asia
+    // === Rest of Asia ===
     'HL': 'PM37', 'DS': 'PM37', '6K': 'PM37', '6L': 'PM37', // South Korea
-    'BV': 'PL04', 'BW': 'PL04', 'BX': 'PL04', // Taiwan
-    'BY': 'OM92', 'BT': 'OM92', 'BA': 'OM92', 'BD': 'OM92', 'BG': 'OM92', // China
-    'VU': 'MK82', 'VU2': 'MK82', 'VU3': 'MK82', // India
+    'BV': 'PL04', 'BW': 'PL04', 'BX': 'PL04', 'BM': 'PL04', 'BN': 'PL04', 'BO': 'PL04', 'BP': 'PL04', 'BQ': 'PL04', // Taiwan
+    'BY': 'OM92', 'BT': 'OM92', 'BA': 'OM92', 'BD': 'OM92', 'BG': 'OM92', 'BH': 'OM92', 'BI': 'OM92', 'BJ': 'OM92', 'BL': 'OM92', 'BR': 'OM92', 'BS': 'OM92', // China
+    'VR': 'OL72', // Hong Kong
+    'XX9': 'OL62', // Macau
+    'VU': 'MK82', 'VU2': 'MK82', 'VU3': 'MK82', 'AT': 'MK82', // India
+    'AP': 'MM42', // Pakistan
+    '4S': 'NJ06', // Sri Lanka
+    'XW': 'NK96', // Laos
+    'XU': 'OK34', // Cambodia
+    'XV': 'OK30', '3W': 'OK30', // Vietnam
     'HS': 'OK03', 'E2': 'OK03', // Thailand
     '9V': 'OJ11', // Singapore
     '9M': 'OJ05', '9W': 'OJ05', // Malaysia
+    'V8': 'OJ85', // Brunei
     'DU': 'PK04', 'DV': 'PK04', 'DW': 'PK04', 'DX': 'PK04', 'DY': 'PK04', 'DZ': 'PK04', '4D': 'PK04', '4E': 'PK04', '4F': 'PK04', '4G': 'PK04', '4H': 'PK04', '4I': 'PK04', // Philippines
     'YB': 'OI33', 'YC': 'OI33', 'YD': 'OI33', 'YE': 'OI33', 'YF': 'OI33', 'YG': 'OI33', 'YH': 'OI33', // Indonesia
+    'JT': 'ON09', 'JU': 'ON09', 'JV': 'ON09', // Mongolia
     
-    // Oceania
-    'VK': 'QF56', 'VK1': 'QF44', 'VK2': 'QF56', 'VK3': 'QF22', 'VK4': 'QG62', 'VK5': 'PF95', 'VK6': 'OF86', 'VK7': 'QE38', // Australia
-    'ZL': 'RF70', 'ZL1': 'RF72', 'ZL2': 'RF70', 'ZL3': 'RE66', 'ZL4': 'RE54', // New Zealand
-    'KH6': 'BL01', // Hawaii
-    'KH2': 'QK24', // Guam
-    'FK': 'RG37', // New Caledonia
-    
-    // South America
-    'LU': 'GF05', 'LW': 'GF05', 'LO': 'GF05', 'L2': 'GF05', 'L3': 'GF05', 'L4': 'GF05', 'L5': 'GF05', 'L6': 'GF05', 'L7': 'GF05', 'L8': 'GF05', 'L9': 'GF05', // Argentina
-    'PY': 'GG87', 'PP': 'GG87', 'PQ': 'GG87', 'PR': 'GG87', 'PS': 'GG87', 'PT': 'GG87', 'PU': 'GG87', 'PV': 'GG87', 'PW': 'GG87', 'PX': 'GG87', // Brazil
-    'CE': 'FF46', 'CA': 'FF46', 'CB': 'FF46', 'CC': 'FF46', 'CD': 'FF46', 'XQ': 'FF46', 'XR': 'FF46', '3G': 'FF46', // Chile
-    'CX': 'GF15', // Uruguay
-    'HC': 'FI09', 'HD': 'FI09', // Ecuador
-    'OA': 'FH17', 'OB': 'FH17', 'OC': 'FH17', // Peru
-    'HK': 'FJ35', 'HJ': 'FJ35', '5J': 'FJ35', '5K': 'FJ35', // Colombia
-    'YV': 'FK60', 'YW': 'FK60', 'YX': 'FK60', 'YY': 'FK60', // Venezuela
-    
-    // Caribbean
-    'KP4': 'FK68', 'NP4': 'FK68', 'WP4': 'FK68', // Puerto Rico
-    'VP5': 'FL31', // Turks & Caicos
-    'HI': 'FK49', // Dominican Republic
-    'CO': 'FL10', 'CM': 'FL10', // Cuba
-    'FG': 'FK96', // Guadeloupe
-    'FM': 'FK94', // Martinique
-    'PJ': 'FK52', // Netherlands Antilles
-    
-    // Africa
-    'ZS': 'KG33', 'ZR': 'KG33', 'ZT': 'KG33', 'ZU': 'KG33', // South Africa
-    '5N': 'JJ55', // Nigeria
-    'CN': 'IM63', // Morocco
-    '7X': 'JM16', // Algeria
-    'SU': 'KL30', // Egypt
-    '5Z': 'KI88', // Kenya
-    'ET': 'KJ49', // Ethiopia
-    'EA8': 'IL18', 'EA9': 'IM75', // Canary Islands, Ceuta
-    
-    // Middle East
+    // === Middle East ===
     'A4': 'LL93', 'A41': 'LL93', 'A45': 'LL93', // Oman
     'A6': 'LL65', 'A61': 'LL65', // UAE
     'A7': 'LL45', 'A71': 'LL45', // Qatar
-    'HZ': 'LL24', // Saudi Arabia
+    'A9': 'LL46', 'A92': 'LL46', // Bahrain
+    '9K': 'LL47', // Kuwait
+    'HZ': 'LL24', '7Z': 'LL24', '8Z': 'LL24', // Saudi Arabia
     '4X': 'KM72', '4Z': 'KM72', // Israel
     'OD': 'KM73', // Lebanon
+    'JY': 'KM72', // Jordan
+    'YK': 'KM74', // Syria
+    'YI': 'LM32', // Iraq
+    'EP': 'LL38', // Iran
     
-    // Other
+    // === Oceania ===
+    'VK': 'QF56', 'VK1': 'QF44', 'VK2': 'QF56', 'VK3': 'QF22', 'VK4': 'QG62', 'VK5': 'PF95', 'VK6': 'OF86', 'VK7': 'QE38', 'VK8': 'PG36', 'VK9': 'QF56', // Australia
+    'AX': 'QF56', // Australia special
+    'ZL': 'RF70', 'ZL1': 'RF72', 'ZL2': 'RF70', 'ZL3': 'RE66', 'ZL4': 'RE54', // New Zealand
+    'ZM': 'RF70', // New Zealand special
+    'FK': 'RG37', // New Caledonia
+    'FO': 'BH51', // French Polynesia
+    'FW': 'AH33', // Wallis & Futuna
+    '3D2': 'RH91', // Fiji
+    '5W': 'AH44', // Samoa
+    'KH0': 'QK25', // Mariana Islands
+    'KH8': 'AH37', // American Samoa
+    'T8': 'PJ77', // Palau
+    'V7': 'RJ38', // Marshall Islands
+    'T3': 'RI92', // Kiribati
+    'A3': 'AH22', // Tonga
+    'ZK3': 'AI51', // Tokelau
+    'E5': 'BG08', // Cook Islands
+    'VK9N': 'RH23', // Norfolk Island
+    'VK0M': 'QE37', // Macquarie Island
+    
+    // === South America ===
+    'LU': 'GF05', 'LW': 'GF05', 'LO': 'GF05', 'LQ': 'GF05', 'LR': 'GF05', 'LS': 'GF05', 'LT': 'GF05', 'LV': 'GF05',
+    'L2': 'GF05', 'L3': 'GF05', 'L4': 'GF05', 'L5': 'GF05', 'L6': 'GF05', 'L7': 'GF05', 'L8': 'GF05', 'L9': 'GF05', // Argentina
+    'AY': 'GF05', 'AZ': 'GF05', // Argentina special
+    'PY': 'GG87', 'PP': 'GG87', 'PQ': 'GG87', 'PR': 'GG87', 'PS': 'GG87', 'PT': 'GG87', 'PU': 'GG87', 'PV': 'GG87', 'PW': 'GG87', 'PX': 'GG87', // Brazil
+    'ZV': 'GG87', 'ZW': 'GG87', 'ZX': 'GG87', 'ZY': 'GG87', 'ZZ': 'GG87', // Brazil special
+    'CE': 'FF46', 'CA': 'FF46', 'CB': 'FF46', 'CC': 'FF46', 'CD': 'FF46', 'XQ': 'FF46', 'XR': 'FF46', '3G': 'FF46', // Chile
+    'CE0': 'DG52', // Easter Island
+    'CX': 'GF15', 'CV': 'GF15', 'CW': 'GF15', // Uruguay
+    'HC': 'FI09', 'HD': 'FI09', // Ecuador
+    'HC8': 'EI49', // Galapagos
+    'OA': 'FH17', 'OB': 'FH17', 'OC': 'FH17', // Peru
+    'HK': 'FJ35', 'HJ': 'FJ35', '5J': 'FJ35', '5K': 'FJ35', // Colombia
+    'HK0': 'EJ96', // San Andres & Providencia
+    'YV': 'FK60', 'YW': 'FK60', 'YX': 'FK60', 'YY': 'FK60', // Venezuela
+    'CP': 'FH63', // Bolivia
+    'ZP': 'FG99', // Paraguay
+    '8R': 'GJ25', // Guyana
+    'PZ': 'GJ15', // Suriname
+    'FY': 'GJ35', // French Guiana
+    
+    // === Central America ===
+    'TI': 'EJ79', // Costa Rica
+    'HP': 'FJ08', // Panama
+    'TG': 'EK44', // Guatemala
+    'YS': 'EK53', // El Salvador
+    'HR': 'EK65', // Honduras
+    'YN': 'EK72', // Nicaragua
+    'V3': 'EK57', // Belize
+    'XE': 'EK09', 'XA': 'EK09', 'XB': 'EK09', 'XC': 'EK09', 'XD': 'EK09', '4A': 'EK09', '4B': 'EK09', '4C': 'EK09', '6D': 'EK09', '6E': 'EK09', '6F': 'EK09', '6G': 'EK09', '6H': 'EK09', '6I': 'EK09', // Mexico
+    
+    // === Caribbean ===
+    'KP4': 'FK68', 'NP4': 'FK68', 'WP4': 'FK68', // Puerto Rico
+    'VP5': 'FL31', // Turks & Caicos
+    'HI': 'FK49', // Dominican Republic
+    'CO': 'FL10', 'CM': 'FL10', 'T4': 'FL10', // Cuba
+    'FG': 'FK96', // Guadeloupe
+    'FM': 'FK94', // Martinique
+    'PJ2': 'FK52', 'PJ4': 'FK52', // Curacao, Bonaire
+    'PJ5': 'FK87', 'PJ6': 'FK87', 'PJ7': 'FK88', // Saba, St Eustatius, St Maarten
+    'HH': 'FK38', // Haiti
+    '6Y': 'FK18', // Jamaica
+    'VP2M': 'FK86', // Montserrat
+    'VP2V': 'FK78', // British Virgin Islands
+    'VP2E': 'FK97', // Anguilla
+    'VP9': 'FM72', // Bermuda
+    'V2': 'FK97', // Antigua & Barbuda
+    'V4': 'FK87', // Saint Kitts & Nevis
+    'J3': 'FK92', // Grenada
+    'J6': 'FK93', // St. Lucia
+    'J7': 'FK95', // Dominica
+    'J8': 'FK93', // St. Vincent
+    '8P': 'GK03', // Barbados
+    '9Y': 'FK90', '9Z': 'FK90', // Trinidad & Tobago
+    'C6': 'FL16', // Bahamas
+    'ZF': 'EK99', // Cayman Islands
+    'FJ': 'FK87', // St. Barthelemy
+    'FS': 'FK88', // St. Martin
+    
+    // === Africa ===
+    'ZS': 'KG33', 'ZR': 'KG33', 'ZT': 'KG33', 'ZU': 'KG33', // South Africa
+    '5N': 'JJ55', '5O': 'JJ55', // Nigeria
+    'CN': 'IM63', // Morocco
+    '7X': 'JM16', // Algeria
+    'TS': 'JM44', '3V': 'JM44', // Tunisia
+    '5A': 'JM73', // Libya
+    'SU': 'KL30', // Egypt
+    '5Z': 'KI88', // Kenya
+    'ET': 'KJ49', // Ethiopia
+    '5H': 'KI73', // Tanzania
+    '9J': 'KH44', // Zambia
+    '9X': 'KI49', // Rwanda
+    '9U': 'KI39', // Burundi
+    '5X': 'KI42', // Uganda
+    'EL': 'IJ56', // Liberia
+    '6W': 'IK14', // Senegal
+    'C5': 'IK13', // Gambia
+    '5T': 'IL33', // Mauritania
+    '9G': 'IJ95', // Ghana
+    'TU': 'IJ46', // Ivory Coast
+    'TY': 'JJ17', // Benin
+    '5V': 'JJ17', // Togo
+    'XT': 'IK52', // Burkina Faso
+    'TZ': 'IK52', // Mali
+    'TJ': 'JJ43', // Cameroon
+    'TN': 'JI74', // Congo (Brazzaville)
+    '9Q': 'JI55', // DR Congo
+    'TR': 'JJ10', // Gabon
+    'TL': 'JJ64', // Central African Republic
+    'ST': 'KK25', // Sudan
+    'J5': 'IK21', // Guinea-Bissau
+    '3X': 'IJ56', // Guinea
+    '9L': 'IJ38', // Sierra Leone
+    'A2': 'KG42', // Botswana
+    'V5': 'JG87', // Namibia
+    '7P': 'KG30', // Lesotho
+    '3DA': 'KG53', // Eswatini
+    'Z2': 'KG51', 'Z21': 'KG51', // Zimbabwe
+    '7Q': 'KH74', // Malawi
+    'C9': 'KH53', // Mozambique
+    '8Q': 'MJ56', // Maldives
+    '3B8': 'LG89', // Mauritius
+    'FR': 'LG78', // Reunion
+    'S7': 'LI75', // Seychelles
+    'D6': 'LI24', // Comoros
+    'FT': 'ME27', // Crozet / Kerguelen / Amsterdam
+    '3B9': 'MH43', // Rodrigues
+    '5R': 'LH67', // Madagascar
+    'V4': 'FK87', // St Kitts (Caribbean, already above)
+    'EA8': 'IL18', 'EA9': 'IM75', // Canary Islands, Ceuta
+    'D4': 'HK76', // Cape Verde
+    '6V': 'IK14', '6W': 'IK14', // Senegal
+    'J2': 'LK10', // Djibouti
+    'E3': 'KK15', // Eritrea
+    'T5': 'KI62', '6O': 'KI62', // Somalia
+    'S0': 'IL33', // Western Sahara
+    
+    // === South Atlantic ===
     'VP8': 'GD18', // Falkland Islands
-    'CE9': 'FC56', 'DP0': 'IB59', 'KC4': 'FC56', // Antarctica
-    'SV5': 'KM46', 'SV9': 'KM25', // Dodecanese, Crete
+    'VP8/G': 'IC86', 'VP8/H': 'IC86', // South Georgia, South Sandwich
+    'ZD7': 'II74', // St. Helena
+    'ZD8': 'II22', // Ascension Island
+    'ZD9': 'IG35', // Tristan da Cunha
+    '3Y': 'JD04', // Bouvet Island
+    
+    // === Antarctica ===
+    'CE9': 'FC56', 'DP0': 'IB59', 'KC4': 'FC56', 'RI1AN': 'MC14',
+    'VP8/': 'GC04', // Various Antarctic bases
+    '8J1RL': 'QC52', // Japan Antarctic
+    
+    // === Other ===
+    'ZB': 'IM76', 'ZG': 'IM76', // Gibraltar
+    'ZC4': 'KM64', // UK Sovereign Bases Cyprus
+    '5B': 'KM64', 'C4': 'KM64', 'H2': 'KM64', 'P3': 'KM64', // Cyprus
   };
-  
-  const upper = callsign.toUpperCase();
   
   // Smart US callsign detection - US prefixes follow specific patterns
   // K, N, W + anything = USA
@@ -1760,21 +1981,12 @@ function estimateLocationFromPrefix(callsign) {
   const usCallPattern = /^([KNW][0-9]?|A[A-L][0-9])/;
   const usMatch = upper.match(usCallPattern);
   if (usMatch) {
-    // Extract call district (the digit) for more precise location
     const districtMatch = upper.match(/^[KNWA][A-L]?([0-9])/);
     const district = districtMatch ? districtMatch[1] : null;
     
     const usDistrictGrids = {
-      '0': 'EN31', // Central (CO, IA, KS, MN, MO, NE, ND, SD)
-      '1': 'FN41', // New England (CT, MA, ME, NH, RI, VT)
-      '2': 'FN20', // NY, NJ
-      '3': 'FM19', // PA, MD, DE
-      '4': 'EM73', // Southeast (AL, FL, GA, KY, NC, SC, TN, VA)
-      '5': 'EM12', // TX, OK, LA, AR, MS, NM
-      '6': 'CM97', // California
-      '7': 'DN31', // Pacific NW/Mountain (AZ, ID, MT, NV, OR, UT, WA, WY)
-      '8': 'EN81', // MI, OH, WV
-      '9': 'EN52', // IL, IN, WI
+      '0': 'EN31', '1': 'FN41', '2': 'FN20', '3': 'FM19', '4': 'EM73',
+      '5': 'EM12', '6': 'CM97', '7': 'DN31', '8': 'EN81', '9': 'EN52',
     };
     
     const grid = district && usDistrictGrids[district] ? usDistrictGrids[district] : 'EM79';
@@ -1782,60 +1994,31 @@ function estimateLocationFromPrefix(callsign) {
     if (gridLoc) {
       return {
         callsign,
-        lat: gridLoc.lat,
-        lon: gridLoc.lon,
-        grid: grid,
-        country: 'USA',
-        estimated: true,
-        source: 'prefix-grid'
+        lat: gridLoc.lat, lon: gridLoc.lon, grid,
+        country: 'USA', estimated: true, source: 'prefix-grid'
       };
     }
   }
   
-  // Try longest prefix match first (up to 4 chars) for non-US calls
-  for (let len = 4; len >= 1; len--) {
+  // Try longest prefix match first (up to 5 chars) for non-US calls
+  for (let len = Math.min(upper.length, 5); len >= 1; len--) {
     const prefix = upper.substring(0, len);
     if (prefixGrids[prefix]) {
       const gridLoc = maidenheadToLatLon(prefixGrids[prefix]);
       if (gridLoc) {
         return { 
           callsign, 
-          lat: gridLoc.lat, 
-          lon: gridLoc.lon, 
+          lat: gridLoc.lat, lon: gridLoc.lon,
           grid: prefixGrids[prefix],
           country: getCountryFromPrefix(prefix),
-          estimated: true,
-          source: 'prefix-grid'
+          estimated: true, source: 'prefix-grid'
         };
       }
     }
   }
   
-  // Fallback to first character (most likely country for each letter)
-  const firstCharGrids = {
-    'A': 'EM79', 'B': 'PL02', 'C': 'FN03', 'D': 'JO51', 'E': 'IO63', // A=USA (AA-AL), B=China, C=Canada, D=Germany, E=Spain/Ireland
-    'F': 'JN18', 'G': 'IO91', 'H': 'KM72', 'I': 'JN61', 'J': 'PM95', // F=France, G=UK, H=varies, I=Italy, J=Japan
-    'K': 'EM79', 'L': 'GF05', 'M': 'IO91', 'N': 'EM79', 'O': 'KP20', // K=USA, L=Argentina, M=UK, N=USA, O=Finland
-    'P': 'GG87', 'R': 'KO85', 'S': 'JO89', 'T': 'KI88', 'U': 'KO85', // P=Brazil, R=Russia, S=Sweden, T=varies, U=Russia
-    'V': 'QF56', 'W': 'EM79', 'X': 'EK09', 'Y': 'JO91', 'Z': 'KG33'  // V=Australia, W=USA, X=Mexico, Y=varies, Z=South Africa
-  };
-  
-  const firstChar = upper[0];
-  if (firstCharGrids[firstChar]) {
-    const gridLoc = maidenheadToLatLon(firstCharGrids[firstChar]);
-    if (gridLoc) {
-      return {
-        callsign,
-        lat: gridLoc.lat,
-        lon: gridLoc.lon,
-        grid: firstCharGrids[firstChar],
-        country: 'Unknown',
-        estimated: true,
-        source: 'prefix-grid'
-      };
-    }
-  }
-  
+  // No match found — return null rather than guess wrong
+  // It's better to not plot a spot than to plot it on the wrong continent
   return null;
 }
 
@@ -1845,15 +2028,34 @@ function getCountryFromPrefix(prefix) {
     'W': 'USA', 'K': 'USA', 'N': 'USA', 'AA': 'USA',
     'VE': 'Canada', 'VA': 'Canada', 'VY': 'Canada', 'VO': 'Canada',
     'G': 'England', 'M': 'England', '2E': 'England', 'GM': 'Scotland', 'GW': 'Wales', 'GI': 'N. Ireland',
-    'EI': 'Ireland', 'F': 'France', 'DL': 'Germany', 'I': 'Italy', 'EA': 'Spain', 'CT': 'Portugal',
-    'PA': 'Netherlands', 'ON': 'Belgium', 'HB': 'Switzerland', 'OE': 'Austria',
-    'OZ': 'Denmark', 'SM': 'Sweden', 'LA': 'Norway', 'OH': 'Finland',
-    'SP': 'Poland', 'OK': 'Czech Rep', 'HA': 'Hungary', 'YO': 'Romania', 'LZ': 'Bulgaria',
-    'UA': 'Russia', 'UR': 'Ukraine',
+    'GD': 'Isle of Man', 'GJ': 'Jersey', 'GU': 'Guernsey', 'GB': 'UK',
+    'EI': 'Ireland', 'F': 'France', 'TM': 'France', 'TK': 'Corsica',
+    'DL': 'Germany', 'DJ': 'Germany', 'DK': 'Germany', 'DA': 'Germany', 'DB': 'Germany', 'DC': 'Germany', 'DD': 'Germany', 'DF': 'Germany', 'DG': 'Germany', 'DH': 'Germany', 'DO': 'Germany',
+    'I': 'Italy', 'IK': 'Italy', 'IZ': 'Italy',
+    'EA': 'Spain', 'EA6': 'Balearic Is.', 'EA8': 'Canary Is.', 'EA9': 'Ceuta',
+    'CT': 'Portugal', 'CT3': 'Madeira', 'CU': 'Azores',
+    'PA': 'Netherlands', 'ON': 'Belgium', 'LX': 'Luxembourg',
+    'HB': 'Switzerland', 'HB0': 'Liechtenstein', 'OE': 'Austria',
+    'OZ': 'Denmark', 'OX': 'Greenland', 'OY': 'Faroe Islands',
+    'SM': 'Sweden', 'LA': 'Norway', 'JW': 'Svalbard', 'OH': 'Finland',
+    'SP': 'Poland', 'OK': 'Czech Rep.', 'OM': 'Slovakia',
+    'HA': 'Hungary', 'YO': 'Romania', 'LZ': 'Bulgaria',
+    'UA': 'Russia', 'RA': 'Russia', 'R': 'Russia',
+    'UR': 'Ukraine', 'UT': 'Ukraine', 'US': 'Ukraine',
+    'EU': 'Belarus', 'UN': 'Kazakhstan', 'EK': 'Armenia', '4L': 'Georgia', '4J': 'Azerbaijan',
+    'YU': 'Serbia', '9A': 'Croatia', 'S5': 'Slovenia', 'T9': 'Bosnia', '4O': 'Montenegro', 'ZA': 'Albania', 'Z3': 'N. Macedonia',
+    'SV': 'Greece', '9H': 'Malta', 'LY': 'Lithuania', 'ES': 'Estonia', 'YL': 'Latvia',
+    'TF': 'Iceland', 'TA': 'Turkey', 'ER': 'Moldova', 'T7': 'San Marino', '3A': 'Monaco', 'C3': 'Andorra',
     'JA': 'Japan', 'HL': 'S. Korea', 'BV': 'Taiwan', 'BY': 'China', 'VU': 'India', 'HS': 'Thailand',
-    'VK': 'Australia', 'ZL': 'New Zealand', 'KH6': 'Hawaii',
-    'LU': 'Argentina', 'PY': 'Brazil', 'CE': 'Chile', 'HK': 'Colombia', 'YV': 'Venezuela',
-    'ZS': 'South Africa', 'CN': 'Morocco', 'SU': 'Egypt'
+    'DU': 'Philippines', 'YB': 'Indonesia', '9V': 'Singapore', '9M': 'Malaysia', 'VR': 'Hong Kong',
+    'VK': 'Australia', 'ZL': 'New Zealand', 'KH6': 'Hawaii', 'KL': 'Alaska',
+    'LU': 'Argentina', 'PY': 'Brazil', 'ZV': 'Brazil', 'CE': 'Chile', 'CX': 'Uruguay',
+    'HC': 'Ecuador', 'OA': 'Peru', 'HK': 'Colombia', 'YV': 'Venezuela', 'CP': 'Bolivia', 'ZP': 'Paraguay',
+    'TI': 'Costa Rica', 'HP': 'Panama', 'TG': 'Guatemala', 'YS': 'El Salvador', 'HR': 'Honduras', 'YN': 'Nicaragua', 'V3': 'Belize',
+    'XE': 'Mexico', 'HI': 'Dominican Rep.', 'CO': 'Cuba', '6Y': 'Jamaica', 'C6': 'Bahamas', 'ZF': 'Cayman Is.',
+    'ZS': 'South Africa', 'CN': 'Morocco', 'SU': 'Egypt', '5Z': 'Kenya', 'ET': 'Ethiopia', '5N': 'Nigeria', '5H': 'Tanzania',
+    'HZ': 'Saudi Arabia', 'A6': 'UAE', 'A7': 'Qatar', '4X': 'Israel', 'OD': 'Lebanon',
+    'VP8': 'Falkland Is.', 'VP9': 'Bermuda', 'ZB': 'Gibraltar', '5B': 'Cyprus',
   };
   
   for (let len = 3; len >= 1; len--) {
