@@ -261,7 +261,12 @@ function addMinimizeToggle(element, storageKey) {
   
   // Create minimize button
   const header = element.querySelector('div:first-child');
-  if (!header) return;
+  if (!header) {
+    console.warn('[WSPR] No header found for minimize toggle on', storageKey);
+    return;
+  }
+  
+  console.log('[WSPR] Adding minimize toggle to', storageKey);
   
   // Wrap content (everything except header)
   const content = Array.from(element.children).slice(1);
