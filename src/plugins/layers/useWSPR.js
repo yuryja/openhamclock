@@ -467,7 +467,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     };
 
     fetchWSPR();
-    const interval = setInterval(fetchWSPR, 300000);
+    const interval = setInterval(fetchWSPR, 60000); // Poll every 60 seconds
 
     return () => clearInterval(interval);
   }, [enabled, bandFilter, timeWindow, callsign, filterByGrid]);
@@ -1340,20 +1340,20 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       else if (intensity > 0.3) color = '#ffaa00'; // Yellow - warm
       else color = '#00aaff'; // Blue - cool
       
-      // Create cloud-like effect with multiple overlapping circles
-      const baseRadius = 40 + (intensity * 80); // 40-120 pixels
+      // Create cloud-like effect with multiple overlapping circles (REDUCED SIZE)
+      const baseRadius = 8 + (intensity * 15); // 8-23 pixels (much smaller!)
       const numLayers = 3; // Multiple circles for cloud effect
       
       for (let i = 0; i < numLayers; i++) {
         const layerRadius = baseRadius * (1.5 - i * 0.3); // Decreasing sizes
-        const layerOpacity = (0.15 + intensity * 0.25) * (1 - i * 0.3) * heatmapOpacity; // Fade outer layers
+        const layerOpacity = (0.2 + intensity * 0.3) * (1 - i * 0.3) * heatmapOpacity; // Slightly more visible
         
-        // Slightly offset each layer for organic cloud look
-        const offsetLat = point.lat + (Math.random() - 0.5) * 0.1;
-        const offsetLon = point.lon + (Math.random() - 0.5) * 0.1;
+        // Slightly offset each layer for organic cloud look (smaller offset)
+        const offsetLat = point.lat + (Math.random() - 0.5) * 0.02;
+        const offsetLon = point.lon + (Math.random() - 0.5) * 0.02;
         
         const circle = L.circle([offsetLat, offsetLon], {
-          radius: layerRadius * 50000, // Convert to meters for Leaflet
+          radius: layerRadius * 8000, // Much smaller radius (was 50000)
           fillColor: color,
           fillOpacity: layerOpacity,
           color: color,
