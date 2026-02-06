@@ -1,7 +1,6 @@
 /**
  * Layer Plugin Registry
  */
-
 import * as WXRadarPlugin from './layers/useWXRadar.js';
 import * as EarthquakesPlugin from './layers/useEarthquakes.js';
 import * as AuroraPlugin from './layers/useAurora.js';
