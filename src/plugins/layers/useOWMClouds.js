@@ -23,13 +23,16 @@ export const useLayer = (map, enabled, opacity) => {
 
     if (enabled) {
       // Use the API Key from your .env file
-      const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || ''; 
+      const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY; 
       
-      layerRef.current = L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${apiKey}`, {
+    layerRef.current = L.tileLayer(
+      `https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${apiKey}`, 
+      {
         opacity: opacity,
         zIndex: 1000,
         attribution: '© OpenWeatherMap'
-      });
+      }
+    );
       layerRef.current.addTo(map);
     } else {
       if (layerRef.current) {
