@@ -3979,7 +3979,7 @@ function latLonToGrid(lat, lon) {
 // Persistent RBN connection and spot storage
 let rbnConnection = null;
 let rbnSpots = []; // Rolling buffer of recent spots
-const MAX_RBN_SPOTS = 500; // Keep last 500 spots
+const MAX_RBN_SPOTS = 2000; // Keep last 2000 spots (all modes: CW, FT8, FT4, RTTY, PSK)
 const RBN_SPOT_TTL = 30 * 60 * 1000; // 30 minutes
 const callsignLocationCache = new Map(); // Permanent cache for skimmer locations
 
@@ -4047,11 +4047,17 @@ function maintainRBNConnection(port = 7000) {
       }
       
       // Parse RBN spot line format:
-      // DX de W3LPL-#:     7003.0  K3LR           CW    30 dB  23 WPM  CQ      0123Z
-      const spotMatch = line.match(/DX de\s+(\S+)\s*:\s*([\d.]+)\s+(\S+)\s+(\S+)\s+([-\d]+)\s+dB\s+(\d+)\s+WPM/);
+      // CW:   DX de W3LPL-#:     7003.0  K3LR           CW    30 dB  23 WPM  CQ      0123Z
+      // FT8:  DX de KM3T-#:     14074.0  K3LR           FT8   -12 dB              CQ      0123Z
+      // RTTY: DX de W3LPL-#:    14080.0  K3LR           RTTY  15 dB  45 BPS  CQ      0123Z
+      const spotMatch = line.match(/DX de\s+(\S+)\s*:\s*([\d.]+)\s+(\S+)\s+(\S+)\s+([-\d]+)\s+dB/);
       
       if (spotMatch) {
-        const [, skimmer, freq, dx, mode, snr, wpm] = spotMatch;
+        const [, skimmer, freq, dx, mode, snr] = spotMatch;
+        // Optionally extract WPM or BPS after dB
+        const speedMatch = line.match(/(\d+)\s+(WPM|BPS)/i);
+        const wpm = speedMatch ? parseInt(speedMatch[1]) : null;
+        const speedUnit = speedMatch ? speedMatch[2].toUpperCase() : null;
         const timestamp = Date.now();
         const freqNum = parseFloat(freq) * 1000;
         const band = freqToBandKHz(freqNum / 1000);
@@ -4065,7 +4071,8 @@ function maintainRBNConnection(port = 7000) {
           band: band,
           mode: mode,
           snr: parseInt(snr),
-          wpm: parseInt(wpm),
+          wpm: wpm,
+          speedUnit: speedUnit,
           timestamp: new Date().toISOString(),
           timestampMs: timestamp,
           age: 0,
